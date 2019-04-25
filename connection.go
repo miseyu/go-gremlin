@@ -3,7 +3,6 @@ package gremlin
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 )
 
 var servers []*url.URL
@@ -62,70 +62,67 @@ func (c *Client) Exec(req *Request) ([]byte, error) {
 }
 
 // ReadResponse ...
-func (c *Client) ReadResponse() (data []byte, err error) {
+func (c *Client) ReadResponse() ([]byte, error) {
 	// Data buffer
-	var message []byte
 	var dataItems []json.RawMessage
 	inBatchMode := false
 	// Receive data
 	for {
-		if _, message, err = c.Ws.ReadMessage(); err != nil {
-			return
+		_, message, err := c.Ws.ReadMessage()
+		if err != nil {
+			return []byte{}, errors.Wrapf(err, "failed to read message from websocket connection")
 		}
 		var res *Response
-		if err = json.Unmarshal(message, &res); err != nil {
-			return
+		if err := json.Unmarshal(message, &res); err != nil {
+			return []byte{}, errors.Wrapf(err, "failed to decode json")
 		}
 		var items []json.RawMessage
 		switch res.Status.Code {
 		case StatusNoContent:
-			return
+			return []byte{}, nil
 
 		case StatusAuthenticate:
 			return c.Authenticate(res.RequestID)
 		case StatusPartialContent:
 			inBatchMode = true
-			if err = json.Unmarshal(res.Result.Data, &items); err != nil {
-				return
+			if err := json.Unmarshal(res.Result.Data, &items); err != nil {
+				return []byte{}, errors.Wrapf(err, "failed to decode json")
 			}
 			dataItems = append(dataItems, items...)
 
 		case StatusSuccess:
 			if inBatchMode {
-				if err = json.Unmarshal(res.Result.Data, &items); err != nil {
-					return
+				if err := json.Unmarshal(res.Result.Data, &items); err != nil {
+					return []byte{}, errors.Wrapf(err, "failed to decode json")
 				}
 				dataItems = append(dataItems, items...)
-				data, err = json.Marshal(dataItems)
-			} else {
-				data = res.Result.Data
+				data, err := json.Marshal(dataItems)
+				if err != nil {
+					return []byte{}, errors.Wrapf(err, "failed to encode json")
+				}
+				return data, nil
 			}
-			return
-
+			return res.Result.Data, nil
 		default:
 			if msg, exists := ErrorMsg[res.Status.Code]; exists {
-				err = errors.New(msg)
-			} else {
-				err = errors.New("An unknown error occured")
+				return []byte{}, errors.New(msg)
 			}
-			return
+			return []byte{}, errors.New("An unknown error occured")
 		}
 	}
-	return
 }
 
 // AuthInfo includes all info related with SASL authentication with the Gremlin server
-// ChallengeId is the  requestID in the 407 status (AUTHENTICATE) response given by the server.
-// We have to send an authentication request with that same RequestID in order to solve the challenge.
 type AuthInfo struct {
-	ChallengeId string
+	ChallengeID string
 	User        string
 	Pass        string
 }
 
+// OptAuth ...
 type OptAuth func(*AuthInfo) error
 
-// Constructor for different authentication possibilities
+// NewAuthInfo is Constructor for different authentication possibilities
 func NewAuthInfo(options ...OptAuth) (*AuthInfo, error) {
 	auth := &AuthInfo{}
 	for _, op := range options {

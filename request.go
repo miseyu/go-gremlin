@@ -3,9 +3,8 @@ package gremlin
 import (
 	"encoding/json"
 
-	"github.com/pkg/errors"
-
 	"github.com/gofrs/uuid"
+	"github.com/pkg/errors"
 )
 
 // Request ...
