@@ -134,7 +134,7 @@ func NewAuthInfo(options ...OptAuth) (*AuthInfo, error) {
 	return auth, nil
 }
 
-// Sets authentication info from environment variables GREMLIN_USER and GREMLIN_PASS
+// OptAuthEnv is Sets authentication info from environment variables GREMLIN_USER and GREMLIN_PASS
 func OptAuthEnv() OptAuth {
 	return func(auth *AuthInfo) error {
 		user, ok := os.LookupEnv("GREMLIN_USER")
@@ -182,16 +182,17 @@ func (c *Client) Authenticate(requestID string) ([]byte, error) {
 	return c.Exec(authReq)
 }
 
+// NewCluster ...
 func NewCluster(s ...string) (err error) {
 	servers = nil
 	// If no arguments use environment variable
 	if len(s) == 0 {
 		connString := strings.TrimSpace(os.Getenv("GREMLIN_SERVERS"))
 		if connString == "" {
-			err = errors.New("No servers set. Configure servers to connect to using the GREMLIN_SERVERS environment variable.")
+			err = errors.New("no servers set. Configure servers to connect to using the GREMLIN_SERVERS environment variable")
 			return
 		}
-		servers, err = SplitServers(connString)
+		servers, err = splitServers(connString)
 		return
 	}
 	// Else use the supplied servers
@@ -205,10 +206,10 @@ func NewCluster(s ...string) (err error) {
 	return
 }
 
-func SplitServers(connString string) (servers []*url.URL, err error) {
+func splitServers(connString string) (servers []*url.URL, err error) {
 	serverStrings := strings.Split(connString, ",")
 	if len(serverStrings) < 1 {
-		err = errors.New("Connection string is not in expected format. An example of the expected format is 'ws://server1:8182, ws://server2:8182'.")
+		err = errors.New("connection string is not in expected format. An example of the expected format is 'ws://server1:8182, ws://server2:8182'")
 		return
 	}
 	for _, serverString := range serverStrings {
